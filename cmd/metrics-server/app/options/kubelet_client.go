@@ -88,7 +88,7 @@ func NewKubeletClientOptions() *KubeletClientOptions {
 	o := &KubeletClientOptions{
 		KubeletPort:                  10250,
 		KubeletPreferredAddressTypes: make([]string, len(utils.DefaultAddressTypePriority)),
-		KubeletRequestTimeout:        10 * time.Second,
+		KubeletRequestTimeout:        1 * time.Second,
 	}
 
 	for i, addrType := range utils.DefaultAddressTypePriority {

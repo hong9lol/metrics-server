@@ -17,7 +17,6 @@ package scraper
 import (
 	"context"
 	"errors"
-	"math/rand"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -126,16 +125,16 @@ func (c *scraper) Scrape(baseCtx context.Context) *storage.MetricsBatch {
 	startTime := myClock.Now()
 
 	// TODO(serathius): re-evaluate this code -- do we really need to stagger fetches like this?
-	delayMs := delayPerSourceMs * len(nodes)
-	if delayMs > maxDelayMs {
-		delayMs = maxDelayMs
-	}
+	// delayMs := delayPerSourceMs * len(nodes)
+	// if delayMs > maxDelayMs {
+	// 	delayMs = maxDelayMs
+	// }
 
 	for _, node := range nodes {
 		go func(node *corev1.Node) {
 			// Prevents network congestion.
-			sleepDuration := time.Duration(rand.Intn(delayMs)) * time.Millisecond
-			time.Sleep(sleepDuration)
+			// sleepDuration := time.Duration(rand.Intn(delayMs)) * time.Millisecond
+			// time.Sleep(sleepDuration)
 			// make the timeout a bit shorter to account for staggering, so we still preserve
 			// the overall timeout
 			ctx, cancelTimeout := context.WithTimeout(baseCtx, c.scrapeTimeout)

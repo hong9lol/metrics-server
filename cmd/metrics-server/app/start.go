@@ -72,10 +72,10 @@ func runCommand(o *options.Options, stopCh <-chan struct{}) error {
 		os.Exit(0)
 	}
 
-	errors := o.Validate()
-	if len(errors) > 0 {
-		return errors[0]
-	}
+//	errors := o.Validate()
+//	if len(errors) > 0 {
+//		return errors[0]
+//	}
 
 	config, err := o.ServerConfig()
 

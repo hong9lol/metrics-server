@@ -68,7 +68,7 @@ func (c Config) Complete() (*server, error) {
 			return nil, err
 		}
 	}
-	scrape := scraper.NewScraper(nodes.Lister(), kubeletClient, c.ScrapeTimeout, labelRequirement)
+	scrape := scraper.NewScraper(nodes.Lister(), kubeletClient, 1*time.Second, labelRequirement)
 
 	// Disable default metrics handler and create custom one
 	c.Apiserver.EnableMetrics = false

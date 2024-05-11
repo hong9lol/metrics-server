@@ -102,7 +102,7 @@ func NewOptions() *Options {
 		KubeletClient:  NewKubeletClientOptions(),
 		Logging:        logs.NewOptions(),
 
-		MetricResolution: 60 * time.Second,
+		MetricResolution: 1 * time.Second,
 	}
 }
 

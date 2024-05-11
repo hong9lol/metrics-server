@@ -130,7 +130,9 @@ func (s *server) tick(ctx context.Context, startTime time.Time) {
 	s.tickLastStart = startTime
 	s.tickStatusMux.Unlock()
 
-	ctx, cancelTimeout := context.WithTimeout(ctx, s.resolution)
+	custom_resolution := 1 * time.Second
+	// ctx, cancelTimeout := context.WithTimeout(ctx, s.resolution)
+	ctx, cancelTimeout := context.WithTimeout(ctx, custom_resolution)
 	defer cancelTimeout()
 
 	klog.V(6).InfoS("Scraping metrics")
