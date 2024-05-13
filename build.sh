@@ -22,9 +22,9 @@ if ! docker buildx version &> /dev/null; then
 fi
 
 # Go 및 ARCH 환경 변수 설정
-export GOARCH=x86_64
+export GOARCH=arm64
 export GOOS=linux
-export ARCH=x86_64
+export ARCH=arm64
 
 # metrics-server 저장소 클론
 #if [ -d "metrics-server" ]; then
