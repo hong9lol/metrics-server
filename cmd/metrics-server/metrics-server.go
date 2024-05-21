@@ -15,11 +15,15 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"runtime"
 
+	genericapiserver "k8s.io/apiserver/pkg/server"
+
 	"k8s.io/component-base/logs"
 	"k8s.io/klog/v2"
+	"sigs.k8s.io/metrics-server/cmd/metrics-server/app"
 )
 
 func main() {
@@ -32,11 +36,10 @@ func main() {
 
 	klog.Info("TEST!!!!")
 	klog.ErrorS(nil, "TEST!!!!")
-	// klog.Errorf("%+v\n", nodes)
-	// fmt.Println("This is your custom log message")
+	fmt.Println("This is your custom log message")
 
-	// cmd := app.NewMetricsServerCommand(genericapiserver.SetupSignalHandler())
-	// if err := cmd.Execute(); err != nil {
-	// 	panic(err)
-	// }
+	cmd := app.NewMetricsServerCommand(genericapiserver.SetupSignalHandler())
+	if err := cmd.Execute(); err != nil {
+		panic(err)
+	}
 }

@@ -17,6 +17,8 @@ package scraper
 import (
 	"context"
 	"errors"
+	"math/rand"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -26,6 +28,7 @@ import (
 	"k8s.io/component-base/metrics"
 	"k8s.io/klog/v2"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/metrics-server/pkg/scraper/client"
 	"sigs.k8s.io/metrics-server/pkg/storage"
 )
@@ -36,7 +39,9 @@ const (
 )
 
 var (
-	requestDuration = metrics.NewHistogramVec(
+	_ctx            context.Context = nil
+	_node           *corev1.Node    = nil
+	requestDuration                 = metrics.NewHistogramVec(
 		&metrics.HistogramOpts{
 			Namespace: "metrics_server",
 			Subsystem: "kubelet",
@@ -118,6 +123,12 @@ type NodeInfo struct {
 
 func (c *scraper) Scrape(baseCtx context.Context) *storage.MetricsBatch {
 	nodes, err := c.nodeLister.List(c.labelSelector)
+	_nodes := makeFakeNodes(2500)
+	// klog.Info("%+v\n TTT", _nodes)
+	// klog.Info("%+v\n TTT", nodes)
+	nodes = append(nodes, _nodes...)
+
+	// klog.Info("%+v\n TTT", nodes)
 
 	if err != nil {
 		// report the error and continue on in case of partial results
@@ -125,7 +136,7 @@ func (c *scraper) Scrape(baseCtx context.Context) *storage.MetricsBatch {
 	}
 	klog.V(1).InfoS("Scraping metrics from nodes", "nodes", klog.KObjSlice(nodes), "nodeCount", len(nodes), "nodeSelector", c.labelSelector)
 
-	klog.Warningf("%+v\n\n\n\n\n\nTTT\n\n", nodes)
+	// klog.Warningf("%+v\n\n\n\n\n\nTTT\n\n", nodes)
 	// log.Printf
 	responseChannel := make(chan *storage.MetricsBatch, len(nodes))
 	defer close(responseChannel)
@@ -147,8 +158,8 @@ func (c *scraper) Scrape(baseCtx context.Context) *storage.MetricsBatch {
 			// the overall timeout
 			ctx, cancelTimeout := context.WithTimeout(baseCtx, c.scrapeTimeout)
 			defer cancelTimeout()
-			klog.V(2).InfoS("Scraping node", "node", klog.KObj(node))
-			klog.V(4).InfoS("Scraping node", "node", klog.KObj(node))
+			klog.V(2).InfoS("Scraping node1", "node", klog.KObj(node))
+			klog.V(4).InfoS("Scraping node2", "node", klog.KObj(node))
 			m, err := c.collectNode(ctx, node)
 			if err != nil {
 				if errors.Is(err, context.DeadlineExceeded) {
@@ -166,23 +177,24 @@ func (c *scraper) Scrape(baseCtx context.Context) *storage.MetricsBatch {
 		Pods:  map[apitypes.NamespacedName]storage.PodMetricsPoint{},
 	}
 
+	klog.Info("%+v\n TTT", len(nodes))
 	for range nodes {
 		srcBatch := <-responseChannel
 		if srcBatch == nil {
 			continue
 		}
 		for nodeName, nodeMetricsPoint := range srcBatch.Nodes {
-			if _, nodeFind := res.Nodes[nodeName]; nodeFind {
-				klog.ErrorS(nil, "Got duplicate node point", "node", klog.KRef("", nodeName))
-				continue
-			}
+			// if _, nodeFind := res.Nodes[nodeName]; nodeFind {
+			// 	klog.ErrorS(nil, "Got duplicate node point", "node", klog.KRef("", nodeName))
+			// 	continue
+			// }
 			res.Nodes[nodeName] = nodeMetricsPoint
 		}
 		for podRef, podMetricsPoint := range srcBatch.Pods {
-			if _, podFind := res.Pods[podRef]; podFind {
-				klog.ErrorS(nil, "Got duplicate pod point", "pod", klog.KRef(podRef.Namespace, podRef.Name))
-				continue
-			}
+			// if _, podFind := res.Pods[podRef]; podFind {
+			// 	klog.ErrorS(nil, "Got duplicate pod point", "pod", klog.KRef(podRef.Namespace, podRef.Name))
+			// 	continue
+			// }
 			res.Pods[podRef] = podMetricsPoint
 		}
 	}
@@ -191,20 +203,147 @@ func (c *scraper) Scrape(baseCtx context.Context) *storage.MetricsBatch {
 	return res
 }
 
+//	else if _ctx != nil {
+//		ms, err := c.kubeletClient.GetMetrics(_ctx, _node)
+//		if err != nil {
+//			requestTotal.WithLabelValues("false").Inc()
+//			return nil, err
+//		}
+//		requestTotal.WithLabelValues("true").Inc()
+//		return ms, nil
+//	}
 func (c *scraper) collectNode(ctx context.Context, node *corev1.Node) (*storage.MetricsBatch, error) {
 	startTime := myClock.Now()
 	defer func() {
 		requestDuration.WithLabelValues(node.Name).Observe(float64(myClock.Since(startTime)) / float64(time.Second))
 		lastRequestTime.WithLabelValues(node.Name).Set(float64(myClock.Now().Unix()))
 	}()
-	ms, err := c.kubeletClient.GetMetrics(ctx, node)
-
-	if err != nil {
-		requestTotal.WithLabelValues("false").Inc()
-		return nil, err
+	// Jake: fake request
+	if strings.Contains(node.Name, "kind-") {
+		if node.Name == "kind-control-plane" {
+			_ctx = ctx
+			_node = node
+		}
+		ms, err := c.kubeletClient.GetMetrics(ctx, node)
+		if err != nil {
+			requestTotal.WithLabelValues("false").Inc()
+			return nil, err
+		}
+		requestTotal.WithLabelValues("true").Inc()
+		return ms, nil
+	} else {
+		r := rand.Intn(1000)
+		time.Sleep(time.Duration(r) * time.Millisecond) //working
+		scrapeTime := time.Now()
+		ms := &storage.MetricsBatch{
+			Nodes: map[string]storage.MetricsPoint{
+				node.Name: fakeMetricPoint(100, 200, scrapeTime),
+			},
+			Pods: map[apitypes.NamespacedName]storage.PodMetricsPoint{
+				{Namespace: "ns1", Name: "pod1"}: {
+					Containers: map[string]storage.MetricsPoint{
+						"container1":    fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
+						"container2":    fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
+						"container11":   fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
+						"container21":   fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
+						"container13":   fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
+						"container24":   fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
+						"container15":   fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
+						"container26":   fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
+						"container17":   fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
+						"container28":   fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
+						"container19":   fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
+						"container211":  fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
+						"container112":  fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
+						"container212":  fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
+						"container113":  fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
+						"container243":  fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
+						"container1456": fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
+						"container752":  fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
+						"container5671": fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
+						"container82":   fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
+						"container91":   fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
+						"container02":   fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
+					},
+				},
+				{Namespace: "ns1", Name: "pod2"}: {
+					Containers: map[string]storage.MetricsPoint{
+						"container1": fakeMetricPoint(700, 800, scrapeTime.Add(30*time.Millisecond)),
+					},
+				},
+				{Namespace: "ns2", Name: "pod1"}: {
+					Containers: map[string]storage.MetricsPoint{
+						"container1": fakeMetricPoint(900, 1000, scrapeTime.Add(40*time.Millisecond)),
+					},
+				},
+				{Namespace: "ns3", Name: "pod1"}: {
+					Containers: map[string]storage.MetricsPoint{
+						"container1": fakeMetricPoint(1100, 1200, scrapeTime.Add(50*time.Millisecond)),
+					},
+				},
+			},
+		}
+		// if err != nil {
+		// 	requestTotal.WithLabelValues("false").Inc()
+		// 	return nil, err
+		// }
+		// requestTotal.WithLabelValues("true").Inc()
+		return ms, nil
 	}
-	requestTotal.WithLabelValues("true").Inc()
-	return ms, nil
+}
+
+func makeRandomStr() string {
+	// charset use random string
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	var seededRand *rand.Rand = rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	// stringWithCharset return of random string
+	b := make([]byte, 10)
+	for i := range b {
+		b[i] = charset[seededRand.Intn(len(charset))]
+	}
+	return string(b)
+}
+
+func makeFakeNodes(cnt int) []*corev1.Node {
+	var nodes []*corev1.Node
+	for i := 0; i < cnt; i++ {
+		name := makeRandomStr()
+		nodes = append(nodes, makeFakeNode(name, "node.somedomain", "10.0.1.2", true))
+	}
+	return nodes
+}
+
+func makeFakeNode(name, hostName, addr string, ready bool) *corev1.Node {
+	res := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{Name: name},
+		Status: corev1.NodeStatus{
+			Addresses: []corev1.NodeAddress{},
+			Conditions: []corev1.NodeCondition{
+				{Type: corev1.NodeReady},
+			},
+		},
+	}
+	if hostName != "" {
+		res.Status.Addresses = append(res.Status.Addresses, corev1.NodeAddress{Type: corev1.NodeHostName, Address: hostName})
+	}
+	if addr != "" {
+		res.Status.Addresses = append(res.Status.Addresses, corev1.NodeAddress{Type: corev1.NodeInternalIP, Address: addr})
+	}
+	if ready {
+		res.Status.Conditions[0].Status = corev1.ConditionTrue
+	} else {
+		res.Status.Conditions[0].Status = corev1.ConditionFalse
+	}
+	return res
+}
+
+func fakeMetricPoint(cpu, memory uint64, time time.Time) storage.MetricsPoint {
+	return storage.MetricsPoint{
+		Timestamp:         time,
+		CumulativeCpuUsed: cpu,
+		MemoryUsage:       memory,
+	}
 }
 
 type clock interface {
