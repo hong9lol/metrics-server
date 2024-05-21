@@ -140,7 +140,6 @@ func (s *server) tick(ctx context.Context, startTime time.Time) {
 
 	klog.V(6).InfoS("Storing metrics")
 	s.storage.Store(data)
-
 	collectTime := time.Since(startTime)
 	tickDuration.Observe(float64(collectTime) / float64(time.Second))
 	klog.V(6).InfoS("Scraping cycle complete")

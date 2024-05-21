@@ -18,10 +18,8 @@ import (
 	"os"
 	"runtime"
 
-	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/component-base/logs"
-
-	"sigs.k8s.io/metrics-server/cmd/metrics-server/app"
+	"k8s.io/klog/v2"
 )
 
 func main() {
@@ -32,8 +30,13 @@ func main() {
 		runtime.GOMAXPROCS(runtime.NumCPU())
 	}
 
-	cmd := app.NewMetricsServerCommand(genericapiserver.SetupSignalHandler())
-	if err := cmd.Execute(); err != nil {
-		panic(err)
-	}
+	klog.Info("TEST!!!!")
+	klog.ErrorS(nil, "TEST!!!!")
+	// klog.Errorf("%+v\n", nodes)
+	// fmt.Println("This is your custom log message")
+
+	// cmd := app.NewMetricsServerCommand(genericapiserver.SetupSignalHandler())
+	// if err := cmd.Execute(); err != nil {
+	// 	panic(err)
+	// }
 }

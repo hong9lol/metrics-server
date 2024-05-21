@@ -22,9 +22,9 @@ if ! docker buildx version &> /dev/null; then
 fi
 
 # Go 및 ARCH 환경 변수 설정
-export GOARCH=arm64
+export GOARCH=amd64
 export GOOS=linux
-export ARCH=arm64
+export ARCH=amd64
 
 # metrics-server 저장소 클론
 #if [ -d "metrics-server" ]; then
@@ -47,7 +47,12 @@ docker buildx create --use || true
 # Docker 이미지 생성
 echo "Docker 이미지를 빌드합니다..."
 pwd
-docker buildx build --load --platform linux/${ARCH} -t custom-metrics-server:v0.0.1  .
+docker rmi custom-metrics-server:v0.0.1
+# docker rmi hong9lol/custom-metrics-server:v0.0.1
+docker buildx build --load --platform linux/${ARCH} -t custom-metrics-server:v0.0.1 .
 
-echo "모든 과정이 완료되었습니다. 'custom-metrics-server:latest' 이미지를 사용하여 배포하세요."
+_id=$(docker images custom-metrics-server:v0.0.1 -q)
+docker tag $_id hong9lol/custom-metrics-server:v0.0.1
+
+echo "모든 과정이 완료되었습니다. 'hong9lol/custom-metrics-server:latest' 이미지를 사용하여 배포하세요."
 
