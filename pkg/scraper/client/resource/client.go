@@ -19,6 +19,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math/rand"
 	"net"
 	"net/http"
 	"net/url"
@@ -49,6 +50,7 @@ type kubeletClient struct {
 }
 
 var _ client.KubeletMetricsGetter = (*kubeletClient)(nil)
+var fake_response *http.Response = nil
 
 func NewForConfig(config *client.KubeletClientConfig) (*kubeletClient, error) {
 	transport, err := rest.TransportFor(&config.Client)
@@ -108,11 +110,43 @@ func (kc *kubeletClient) getMetrics(ctx context.Context, url, nodeName string) (
 		return nil, err
 	}
 	requestTime := time.Now()
-	response, err := kc.client.Do(req.WithContext(ctx))
-	if err != nil {
-		return nil, err
+	var response *http.Response = nil
+	// response, err := kc.client.Do(req.WithContext(ctx))
+
+	fmt.Printf("%+v\n nodename ", nodeName)
+	if nodeName == "kind-worker" {
+		response, err = kc.client.Do(req.WithContext(ctx))
+		fmt.Printf("%+v\n real response ", response)
+
+		if err != nil {
+			return nil, err
+		}
+		if fake_response != nil {
+			fake_response.Body.Close()
+		}
+		fake_response = response
+	} else {
+		if fake_response == nil {
+			return nil, err
+		}
+		response = fake_response
+		fmt.Printf("%+v\n fake response ", fake_response)
+		r := rand.Intn(1000)
+		start := time.Now()
+
+		for {
+
+			elapsed := time.Now().Nanosecond() - start.Nanosecond()
+			fmt.Printf("request processing")
+			fmt.Printf("%+v\n elapsed1: \n", elapsed)
+			fmt.Printf("%+v\n elapsed2: \n", r*1000+500000+5000000)
+			// time.Sleep(time.Millisecond * 1000)
+			if elapsed > r*1000+5000000 {
+				break
+			}
+		}
 	}
-	defer response.Body.Close()
+	// defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("request failed, status: %q", response.Status)
 	}
