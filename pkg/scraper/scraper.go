@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"math/rand"
-	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -125,22 +124,10 @@ func (c *scraper) Scrape(baseCtx context.Context) *storage.MetricsBatch {
 
 	startTime := myClock.Now()
 	nodes, err := c.nodeLister.List(c.labelSelector)
-	_nodes := makeFakeNodes(2500)
-	// // klog.Info("%+v\n TTT", _nodes)
-	// // klog.Info("%+v\n TTT", nodes)
+
+	// make fake nodes
+	_nodes := makeFakeNodes(5000)
 	nodes = append(nodes, _nodes...)
-	// var fakeNode *v1.Node
-	// if strings.Contains(nodes[0].Name, "kind-worker") {
-	// 	fakeNode = nodes[0]
-	// } else {
-	// 	fakeNode = nodes[1]
-	// }
-	// for i := 0; i < 5000; i++ {
-	// 	// fakeNode.Name = makeRandomStr()
-	// 	nodes = append(nodes, fakeNode)
-	// }
-	// nodes = nodes[:1]
-	// klog.Info("%+v\n TTT", nodes)
 
 	if err != nil {
 		// report the error and continue on in case of partial results
@@ -148,8 +135,6 @@ func (c *scraper) Scrape(baseCtx context.Context) *storage.MetricsBatch {
 	}
 	// klog.Info("Scraping metrics from nodes", "nodes", klog.KObjSlice(nodes), "nodeCount", len(nodes), "nodeSelector", c.labelSelector)
 
-	// klog.Warningf("%+v\n\n\n\n\n\nTTT\n\n", nodes)
-	// log.Printf
 	responseChannel := make(chan *storage.MetricsBatch, len(nodes))
 	defer close(responseChannel)
 
@@ -171,7 +156,6 @@ func (c *scraper) Scrape(baseCtx context.Context) *storage.MetricsBatch {
 			// the overall timeout
 			ctx, cancelTimeout := context.WithTimeout(baseCtx, c.scrapeTimeout)
 			defer cancelTimeout()
-			// node.Name = node.Name + makeRandomStr()
 			m, err := c.collectNode(ctx, node)
 			if err != nil {
 				if errors.Is(err, context.DeadlineExceeded) {
@@ -221,71 +205,67 @@ func (c *scraper) collectNode(ctx context.Context, node *corev1.Node) (*storage.
 		requestDuration.WithLabelValues(node.Name).Observe(float64(myClock.Since(startTime)) / float64(time.Second))
 		lastRequestTime.WithLabelValues(node.Name).Set(float64(myClock.Now().Unix()))
 	}()
-	if strings.Contains(node.Name, "kind-") {
-		// if node.Name == "kind-control-plane" {
-		// 	_ctx = ctx
-		// 	_node = node
-		// }
-		ms, err := c.kubeletClient.GetMetrics(ctx, node)
-		if err != nil {
-			requestTotal.WithLabelValues("false").Inc()
-			return nil, err
-		}
-		requestTotal.WithLabelValues("true").Inc()
-		return ms, nil
-	} else {
-		makeFakeDelay()
-		scrapeTime := time.Now()
-		ms := &storage.MetricsBatch{
-			Nodes: map[string]storage.MetricsPoint{
-				node.Name: fakeMetricPoint(100, 200, scrapeTime),
-			},
-			Pods: map[apitypes.NamespacedName]storage.PodMetricsPoint{
-				{Namespace: "ns1", Name: "pod1"}: {
-					Containers: map[string]storage.MetricsPoint{
-						"container1":    fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
-						"container2":    fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
-						"container11":   fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
-						"container21":   fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
-						"container13":   fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
-						"container24":   fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
-						"container15":   fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
-						"container26":   fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
-						"container17":   fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
-						"container28":   fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
-						"container19":   fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
-						"container211":  fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
-						"container112":  fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
-						"container212":  fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
-						"container113":  fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
-						"container243":  fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
-						"container1456": fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
-						"container752":  fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
-						"container5671": fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
-						"container82":   fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
-						"container91":   fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
-						"container02":   fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
-					},
-				},
-				{Namespace: "ns1", Name: "pod2"}: {
-					Containers: map[string]storage.MetricsPoint{
-						"container1": fakeMetricPoint(700, 800, scrapeTime.Add(30*time.Millisecond)),
-					},
-				},
-				{Namespace: "ns2", Name: "pod1"}: {
-					Containers: map[string]storage.MetricsPoint{
-						"container1": fakeMetricPoint(900, 1000, scrapeTime.Add(40*time.Millisecond)),
-					},
-				},
-				{Namespace: "ns3", Name: "pod1"}: {
-					Containers: map[string]storage.MetricsPoint{
-						"container1": fakeMetricPoint(1100, 1200, scrapeTime.Add(50*time.Millisecond)),
-					},
-				},
-			},
-		}
-		return ms, nil
+	// if strings.Contains(node.Name, "kind-") {
+	ms, err := c.kubeletClient.GetMetrics(ctx, node)
+	if err != nil {
+		requestTotal.WithLabelValues("false").Inc()
+		return nil, err
 	}
+	requestTotal.WithLabelValues("true").Inc()
+	return ms, nil
+	// } else {
+	// 	makeFakeDelay()
+	// 	scrapeTime := time.Now()
+	// 	ms := &storage.MetricsBatch{
+	// 		Nodes: map[string]storage.MetricsPoint{
+	// 			node.Name: fakeMetricPoint(100, 200, scrapeTime),
+	// 		},
+	// 		Pods: map[apitypes.NamespacedName]storage.PodMetricsPoint{
+	// 			{Namespace: "ns1", Name: "pod1"}: {
+	// 				Containers: map[string]storage.MetricsPoint{
+	// 					"container1":    fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
+	// 					"container2":    fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
+	// 					"container11":   fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
+	// 					"container21":   fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
+	// 					"container13":   fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
+	// 					"container24":   fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
+	// 					"container15":   fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
+	// 					"container26":   fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
+	// 					"container17":   fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
+	// 					"container28":   fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
+	// 					"container19":   fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
+	// 					"container211":  fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
+	// 					"container112":  fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
+	// 					"container212":  fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
+	// 					"container113":  fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
+	// 					"container243":  fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
+	// 					"container1456": fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
+	// 					"container752":  fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
+	// 					"container5671": fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
+	// 					"container82":   fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
+	// 					"container91":   fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
+	// 					"container02":   fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
+	// 				},
+	// 			},
+	// 			{Namespace: "ns1", Name: "pod2"}: {
+	// 				Containers: map[string]storage.MetricsPoint{
+	// 					"container1": fakeMetricPoint(700, 800, scrapeTime.Add(30*time.Millisecond)),
+	// 				},
+	// 			},
+	// 			{Namespace: "ns2", Name: "pod1"}: {
+	// 				Containers: map[string]storage.MetricsPoint{
+	// 					"container1": fakeMetricPoint(900, 1000, scrapeTime.Add(40*time.Millisecond)),
+	// 				},
+	// 			},
+	// 			{Namespace: "ns3", Name: "pod1"}: {
+	// 				Containers: map[string]storage.MetricsPoint{
+	// 					"container1": fakeMetricPoint(1100, 1200, scrapeTime.Add(50*time.Millisecond)),
+	// 				},
+	// 			},
+	// 		},
+	// 	}
+	// 	return ms, nil
+	// }
 }
 
 // for {

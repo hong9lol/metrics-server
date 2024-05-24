@@ -18,6 +18,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -88,6 +89,6 @@ func runCommand(o *options.Options, stopCh <-chan struct{}) error {
 	if err != nil {
 		return err
 	}
-
+	time.Sleep(10 * 1000 * time.Millisecond)
 	return s.RunUntil(stopCh)
 }
