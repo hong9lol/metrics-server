@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"math/rand"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -121,26 +122,38 @@ type NodeInfo struct {
 }
 
 func (c *scraper) Scrape(baseCtx context.Context) *storage.MetricsBatch {
-	nodes, err := c.nodeLister.List(c.labelSelector)
-	_nodes := makeFakeNodes(5000)
-	// klog.Info("%+v\n TTT", _nodes)
-	// klog.Info("%+v\n TTT", nodes)
-	nodes = append(nodes, _nodes...)
 
+	startTime := myClock.Now()
+	nodes, err := c.nodeLister.List(c.labelSelector)
+	_nodes := makeFakeNodes(2500)
+	// // klog.Info("%+v\n TTT", _nodes)
+	// // klog.Info("%+v\n TTT", nodes)
+	nodes = append(nodes, _nodes...)
+	// var fakeNode *v1.Node
+	// if strings.Contains(nodes[0].Name, "kind-worker") {
+	// 	fakeNode = nodes[0]
+	// } else {
+	// 	fakeNode = nodes[1]
+	// }
+	// for i := 0; i < 5000; i++ {
+	// 	// fakeNode.Name = makeRandomStr()
+	// 	nodes = append(nodes, fakeNode)
+	// }
+	// nodes = nodes[:1]
 	// klog.Info("%+v\n TTT", nodes)
 
 	if err != nil {
 		// report the error and continue on in case of partial results
 		klog.ErrorS(err, "Failed to list nodes")
 	}
-	klog.V(1).InfoS("Scraping metrics from nodes", "nodes", klog.KObjSlice(nodes), "nodeCount", len(nodes), "nodeSelector", c.labelSelector)
+	// klog.Info("Scraping metrics from nodes", "nodes", klog.KObjSlice(nodes), "nodeCount", len(nodes), "nodeSelector", c.labelSelector)
 
 	// klog.Warningf("%+v\n\n\n\n\n\nTTT\n\n", nodes)
 	// log.Printf
 	responseChannel := make(chan *storage.MetricsBatch, len(nodes))
 	defer close(responseChannel)
 
-	startTime := myClock.Now()
+	// startTime := myClock.Now()
 
 	// TODO(serathius): re-evaluate this code -- do we really need to stagger fetches like this?
 	// delayMs := delayPerSourceMs * len(nodes)
@@ -150,6 +163,7 @@ func (c *scraper) Scrape(baseCtx context.Context) *storage.MetricsBatch {
 
 	for _, node := range nodes {
 		go func(node *corev1.Node) {
+			rand.Seed(time.Now().UnixNano())
 			// Prevents network congestion.
 			// sleepDuration := time.Duration(rand.Intn(delayMs)) * time.Millisecond
 			// time.Sleep(sleepDuration)
@@ -157,8 +171,7 @@ func (c *scraper) Scrape(baseCtx context.Context) *storage.MetricsBatch {
 			// the overall timeout
 			ctx, cancelTimeout := context.WithTimeout(baseCtx, c.scrapeTimeout)
 			defer cancelTimeout()
-			klog.V(2).InfoS("Scraping node1", "node", klog.KObj(node))
-			klog.V(4).InfoS("Scraping node2", "node", klog.KObj(node))
+			// node.Name = node.Name + makeRandomStr()
 			m, err := c.collectNode(ctx, node)
 			if err != nil {
 				if errors.Is(err, context.DeadlineExceeded) {
@@ -198,38 +211,30 @@ func (c *scraper) Scrape(baseCtx context.Context) *storage.MetricsBatch {
 		}
 	}
 
-	klog.V(1).InfoS("Scrape finished", "duration", myClock.Since(startTime), "nodeCount", len(res.Nodes), "podCount", len(res.Pods))
+	klog.Info("Scrape finished", "duration", myClock.Since(startTime), "nodeCount", len(res.Nodes), "podCount", len(res.Pods))
 	return res
 }
 
-//	else if _ctx != nil {
-//		ms, err := c.kubeletClient.GetMetrics(_ctx, _node)
-//		if err != nil {
-//			requestTotal.WithLabelValues("false").Inc()
-//			return nil, err
-//		}
-//		requestTotal.WithLabelValues("true").Inc()
-//		return ms, nil
-//	}
 func (c *scraper) collectNode(ctx context.Context, node *corev1.Node) (*storage.MetricsBatch, error) {
 	startTime := myClock.Now()
 	defer func() {
 		requestDuration.WithLabelValues(node.Name).Observe(float64(myClock.Since(startTime)) / float64(time.Second))
 		lastRequestTime.WithLabelValues(node.Name).Set(float64(myClock.Now().Unix()))
 	}()
-	// for {
-	// 	klog.Info("%+v\n TTT", node)
-	// }
-	// Jake: fake request
-	// if strings.Contains(node.Name, "kind-") {
-	// 	if node.Name == "kind-control-plane" {
-	// 		_ctx = ctx
-	// 		_node = node
-	// 	}
-	ms, err := c.kubeletClient.GetMetrics(ctx, node)
-	if err != nil {
-		// requestTotal.WithLabelValues("false").Inc()
-		// return nil, err
+	if strings.Contains(node.Name, "kind-") {
+		// if node.Name == "kind-control-plane" {
+		// 	_ctx = ctx
+		// 	_node = node
+		// }
+		ms, err := c.kubeletClient.GetMetrics(ctx, node)
+		if err != nil {
+			requestTotal.WithLabelValues("false").Inc()
+			return nil, err
+		}
+		requestTotal.WithLabelValues("true").Inc()
+		return ms, nil
+	} else {
+		makeFakeDelay()
 		scrapeTime := time.Now()
 		ms := &storage.MetricsBatch{
 			Nodes: map[string]storage.MetricsPoint{
@@ -279,75 +284,141 @@ func (c *scraper) collectNode(ctx context.Context, node *corev1.Node) (*storage.
 				},
 			},
 		}
-		// if err != nil {
-		// 	requestTotal.WithLabelValues("false").Inc()
-		// 	return nil, err
-		// }
-		// requestTotal.WithLabelValues("true").Inc()
 		return ms, nil
 	}
-	requestTotal.WithLabelValues("true").Inc()
-	return ms, nil
-	// } else {
-	// 	r := rand.Intn(1000)
-	// 	time.Sleep(time.Duration(r) * time.Millisecond) //working
-	// 	scrapeTime := time.Now()
-	// 	ms := &storage.MetricsBatch{
-	// 		Nodes: map[string]storage.MetricsPoint{
-	// 			node.Name: fakeMetricPoint(100, 200, scrapeTime),
-	// 		},
-	// 		Pods: map[apitypes.NamespacedName]storage.PodMetricsPoint{
-	// 			{Namespace: "ns1", Name: "pod1"}: {
-	// 				Containers: map[string]storage.MetricsPoint{
-	// 					"container1":    fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
-	// 					"container2":    fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
-	// 					"container11":   fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
-	// 					"container21":   fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
-	// 					"container13":   fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
-	// 					"container24":   fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
-	// 					"container15":   fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
-	// 					"container26":   fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
-	// 					"container17":   fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
-	// 					"container28":   fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
-	// 					"container19":   fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
-	// 					"container211":  fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
-	// 					"container112":  fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
-	// 					"container212":  fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
-	// 					"container113":  fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
-	// 					"container243":  fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
-	// 					"container1456": fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
-	// 					"container752":  fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
-	// 					"container5671": fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
-	// 					"container82":   fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
-	// 					"container91":   fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
-	// 					"container02":   fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
-	// 				},
-	// 			},
-	// 			{Namespace: "ns1", Name: "pod2"}: {
-	// 				Containers: map[string]storage.MetricsPoint{
-	// 					"container1": fakeMetricPoint(700, 800, scrapeTime.Add(30*time.Millisecond)),
-	// 				},
-	// 			},
-	// 			{Namespace: "ns2", Name: "pod1"}: {
-	// 				Containers: map[string]storage.MetricsPoint{
-	// 					"container1": fakeMetricPoint(900, 1000, scrapeTime.Add(40*time.Millisecond)),
-	// 				},
-	// 			},
-	// 			{Namespace: "ns3", Name: "pod1"}: {
-	// 				Containers: map[string]storage.MetricsPoint{
-	// 					"container1": fakeMetricPoint(1100, 1200, scrapeTime.Add(50*time.Millisecond)),
-	// 				},
-	// 			},
-	// 		},
-	// 	}
-	// 	// if err != nil {
-	// 	// 	requestTotal.WithLabelValues("false").Inc()
-	// 	// 	return nil, err
-	// 	// }
-	// 	// requestTotal.WithLabelValues("true").Inc()
-	// 	return ms, nil
-	// }
 }
+
+// for {
+// 	klog.Info("%+v\n TTT", node)
+// }
+// Jake: fake request
+// if strings.Contains(node.Name, "kind-") {
+// 	// if node.Name == "kind-control-plane" {
+// 	// 	_ctx = ctx
+// 	// 	_node = node
+// 	// }
+// ms, err := c.kubeletClient.GetMetrics(ctx, node)
+// if err != nil {
+// 	requestTotal.WithLabelValues("false").Inc()
+// 	return nil, err
+// scrapeTime := time.Now()
+// ms := &storage.MetricsBatch{
+// 	Nodes: map[string]storage.MetricsPoint{
+// 		node.Name: fakeMetricPoint(100, 200, scrapeTime),
+// 	},
+// 	Pods: map[apitypes.NamespacedName]storage.PodMetricsPoint{
+// 		{Namespace: "ns1", Name: "pod1"}: {
+// 			Containers: map[string]storage.MetricsPoint{
+// 				"container1":    fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
+// 				"container2":    fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
+// 				"container11":   fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
+// 				"container21":   fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
+// 				"container13":   fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
+// 				"container24":   fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
+// 				"container15":   fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
+// 				"container26":   fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
+// 				"container17":   fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
+// 				"container28":   fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
+// 				"container19":   fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
+// 				"container211":  fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
+// 				"container112":  fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
+// 				"container212":  fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
+// 				"container113":  fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
+// 				"container243":  fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
+// 				"container1456": fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
+// 				"container752":  fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
+// 				"container5671": fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
+// 				"container82":   fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
+// 				"container91":   fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
+// 				"container02":   fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
+// 			},
+// 		},
+// 		{Namespace: "ns1", Name: "pod2"}: {
+// 			Containers: map[string]storage.MetricsPoint{
+// 				"container1": fakeMetricPoint(700, 800, scrapeTime.Add(30*time.Millisecond)),
+// 			},
+// 		},
+// 		{Namespace: "ns2", Name: "pod1"}: {
+// 			Containers: map[string]storage.MetricsPoint{
+// 				"container1": fakeMetricPoint(900, 1000, scrapeTime.Add(40*time.Millisecond)),
+// 			},
+// 		},
+// 		{Namespace: "ns3", Name: "pod1"}: {
+// 			Containers: map[string]storage.MetricsPoint{
+// 				"container1": fakeMetricPoint(1100, 1200, scrapeTime.Add(50*time.Millisecond)),
+// 			},
+// 		},
+// 	},
+// }
+// // if err != nil {
+// // 	requestTotal.WithLabelValues("false").Inc()
+// // 	return nil, err
+// // }
+// // requestTotal.WithLabelValues("true").Inc()
+// return ms, nil
+// }
+// requestTotal.WithLabelValues("true").Inc()
+// return ms, nil
+// } else {
+// 	r := rand.Intn(1000)
+// 	time.Sleep(time.Duration(r) * time.Millisecond) //working
+// 	scrapeTime := time.Now()
+// 	ms := &storage.MetricsBatch{
+// 		Nodes: map[string]storage.MetricsPoint{
+// 			node.Name: fakeMetricPoint(100, 200, scrapeTime),
+// 		},
+// 		Pods: map[apitypes.NamespacedName]storage.PodMetricsPoint{
+// 			{Namespace: "ns1", Name: "pod1"}: {
+// 				Containers: map[string]storage.MetricsPoint{
+// 					"container1":    fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
+// 					"container2":    fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
+// 					"container11":   fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
+// 					"container21":   fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
+// 					"container13":   fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
+// 					"container24":   fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
+// 					"container15":   fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
+// 					"container26":   fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
+// 					"container17":   fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
+// 					"container28":   fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
+// 					"container19":   fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
+// 					"container211":  fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
+// 					"container112":  fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
+// 					"container212":  fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
+// 					"container113":  fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
+// 					"container243":  fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
+// 					"container1456": fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
+// 					"container752":  fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
+// 					"container5671": fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
+// 					"container82":   fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
+// 					"container91":   fakeMetricPoint(300, 400, scrapeTime.Add(10*time.Millisecond)),
+// 					"container02":   fakeMetricPoint(500, 600, scrapeTime.Add(20*time.Millisecond)),
+// 				},
+// 			},
+// 			{Namespace: "ns1", Name: "pod2"}: {
+// 				Containers: map[string]storage.MetricsPoint{
+// 					"container1": fakeMetricPoint(700, 800, scrapeTime.Add(30*time.Millisecond)),
+// 				},
+// 			},
+// 			{Namespace: "ns2", Name: "pod1"}: {
+// 				Containers: map[string]storage.MetricsPoint{
+// 					"container1": fakeMetricPoint(900, 1000, scrapeTime.Add(40*time.Millisecond)),
+// 				},
+// 			},
+// 			{Namespace: "ns3", Name: "pod1"}: {
+// 				Containers: map[string]storage.MetricsPoint{
+// 					"container1": fakeMetricPoint(1100, 1200, scrapeTime.Add(50*time.Millisecond)),
+// 				},
+// 			},
+// 		},
+// 	}
+// 	// if err != nil {
+// 	// 	requestTotal.WithLabelValues("false").Inc()
+// 	// 	return nil, err
+// 	// }
+// 	// requestTotal.WithLabelValues("true").Inc()
+// 	return ms, nil
+// }
+// }
 
 func makeRandomStr() string {
 	// charset use random string
@@ -403,6 +474,30 @@ func fakeMetricPoint(cpu, memory uint64, time time.Time) storage.MetricsPoint {
 	}
 }
 
+var dummyvalue int = 0
+
+func makeFakeDelay() int {
+	// start := time.Now()
+	// rand.Seed(time.Now().UnixNano())
+	// r := rand.Intn(1000)
+	// r := 30
+	// for {
+	// 	dummyvalue = dummyvalue + 1
+	// 	rand.Intn(100)
+	// 	elapsed := time.Now().Nanosecond() - start.Nanosecond()
+	// 	if elapsed > r*1000 {
+	// 		break
+	// 	}
+	// }
+	// time.Sleep(1000 * time.Millisecond)
+	a := 0
+	for i := 0; i < 100; i++ {
+		time.Sleep(time.Millisecond) // Simulating some delay
+		a += rand.Intn(1000) * rand.Intn(1000)
+	}
+	return rand.Intn(1000) * rand.Intn(1000)
+}
+
 type clock interface {
 	Now() time.Time
 	Since(time.Time) time.Duration
@@ -414,3 +509,45 @@ func (realClock) Now() time.Time                  { return time.Now() }
 func (realClock) Since(d time.Time) time.Duration { return time.Since(d) }
 
 var myClock clock = &realClock{}
+
+// package main
+
+// import (
+// 	"fmt"
+// 	"math/rand"
+// 	"runtime"
+// 	"sync"
+// 	"time"
+// )
+
+// func main() {
+// 	runtime.GOMAXPROCS(runtime.NumCPU())
+
+// 	var wg sync.WaitGroup
+// 	numGoroutines := 10000
+// 	numCalculations := 100000
+
+// 	fmt.Printf("Starting stress test with %d goroutines, each performing %d calculations\n", numGoroutines, numCalculations)
+
+// 	for i := 0; i < numGoroutines; i++ {
+// 		wg.Add(1)
+// 		go func() {
+// 			defer wg.Done()
+// 			performCalculations(numCalculations)
+// 		}()
+// 	}
+
+// 	wg.Wait()
+// 	fmt.Println("Stress test completed")
+// }
+
+// func performCalculations(numCalculations int) {
+// 	for i := 0; i < numCalculations; i++ {
+// 		_ = performHeavyComputation()
+// 	}
+// }
+
+// func performHeavyComputation() int {
+// 	time.Sleep(time.Millisecond) // Simulating some delay
+// 	return rand.Intn(1000) * rand.Intn(1000)
+// }

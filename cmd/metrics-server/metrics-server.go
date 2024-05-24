@@ -30,14 +30,28 @@ func main() {
 	logs.InitLogs()
 	defer logs.FlushLogs()
 
-	if len(os.Getenv("GOMAXPROCS")) == 0 {
-		runtime.GOMAXPROCS(runtime.NumCPU())
-	}
-
 	klog.Info("TEST!!!!")
 	klog.ErrorS(nil, "TEST!!!!")
 	fmt.Println("This is your custom log message")
-
+	if len(os.Getenv("GOMAXPROCS")) == 0 {
+		runtime.GOMAXPROCS(runtime.NumCPU())
+	}
+	runtime.GOMAXPROCS(runtime.NumCPU())
+	// fmt.Println(runtime.GOMAXPROCS(0))
+	// a := 0
+	// for i := 0; i < 20; i++ {
+	// 	go func(a int) {
+	// 		rand.Seed(time.Now().UnixNano())
+	// 		for {
+	// 			a = a + 1
+	// 			// println(rand.Intn(100))
+	// 		}
+	// 	}(a)
+	// }
+	// for {
+	// 	// fmt.Println("This is your custom log message")
+	// 	a = a + 1
+	// }
 	cmd := app.NewMetricsServerCommand(genericapiserver.SetupSignalHandler())
 	if err := cmd.Execute(); err != nil {
 		panic(err)

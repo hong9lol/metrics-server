@@ -130,7 +130,8 @@ func (s *server) tick(ctx context.Context, startTime time.Time) {
 	s.tickLastStart = startTime
 	s.tickStatusMux.Unlock()
 
-	custom_resolution := 1 * time.Second
+	// custom_resolution := 1 * time.Second
+	custom_resolution := 1000 * time.Millisecond
 	// ctx, cancelTimeout := context.WithTimeout(ctx, s.resolution)
 	ctx, cancelTimeout := context.WithTimeout(ctx, custom_resolution)
 	defer cancelTimeout()
@@ -173,11 +174,11 @@ func (s *server) probeMetricCollectionTimely(name string) healthz.HealthChecker 
 		tickLastStart := s.tickLastStart
 		s.tickStatusMux.RUnlock()
 
-		maxTickWait := time.Duration(1.5 * float64(s.resolution))
+		maxTickWait := time.Duration(20.5 * float64(s.resolution))
 		tickWait := time.Since(tickLastStart)
 		if !tickLastStart.IsZero() && tickWait > maxTickWait {
 			err := fmt.Errorf("metric collection didn't finish on time")
-			klog.InfoS("Failed probe", "probe", name, "err", err, "duration", tickWait, "maxDuration", maxTickWait)
+			fmt.Errorf("Failed probe", "probe", name, "err", err, "duration", tickWait, "maxDuration", maxTickWait)
 			return err
 		}
 		return nil

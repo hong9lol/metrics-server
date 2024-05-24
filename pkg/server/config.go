@@ -42,6 +42,7 @@ type Config struct {
 	MetricResolution time.Duration
 	ScrapeTimeout    time.Duration
 	NodeSelector     string
+	a                int
 }
 
 func (c Config) Complete() (*server, error) {
@@ -68,7 +69,7 @@ func (c Config) Complete() (*server, error) {
 			return nil, err
 		}
 	}
-	scrape := scraper.NewScraper(nodes.Lister(), kubeletClient, 1*time.Second, labelRequirement)
+	scrape := scraper.NewScraper(nodes.Lister(), kubeletClient, 15*time.Second, labelRequirement)
 
 	// Disable default metrics handler and create custom one
 	c.Apiserver.EnableMetrics = false
